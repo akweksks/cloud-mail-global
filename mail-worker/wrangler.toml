@@ -53,5 +53,39 @@ crons = ["0 16 * * *"]	# Daily housekeeping at 16:00 UTC
 #admin = "admin@example.com"	# Admin email address
 #jwt_secret = ""				# Random string for JWT signing
 
+# >>> cloud-mail-deploy >>>
+[[d1_databases]]
+binding = "db"
+database_name = "cloud-mail-global"
+database_id = "edd2f7f2-b955-40a2-bca6-2e0d5b6ccf7f"
+
+[[kv_namespaces]]
+binding = "kv"
+id = "e9055f58f742418eb8ccb25e88a34b6a"
+
+[[r2_buckets]]
+binding = "r2"
+bucket_name = "cloud-mail-global-r2"
+
+[[send_email]]
+name = "EMAIL"
+
+[ai]
+binding = "AI"
+
+[[durable_objects.bindings]]
+name = "EMAIL_AGENT"
+class_name = "EmailAgent"
+
+[[migrations]]
+tag = "v1-add-email-agent"
+new_sqlite_classes = ["EmailAgent"]
+
+[vars]
+orm_log = false
+domain = '["citicstrust.com","boo.edu.kg"]'
+admin = "admin@citicstrust.com"
+# <<< cloud-mail-deploy <<<
+
 [build]
 command = "pnpm --prefix ../mail-vue install && pnpm --prefix ../mail-vue run build"
