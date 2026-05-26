@@ -69,6 +69,8 @@ app.post('/external/send', async (c) => {
 
 	// Normalize recipients
 	const toList = Array.isArray(to) ? to : [to];
+	const ccList = cc ? (Array.isArray(cc) ? cc : [cc]) : [];
+	const bccList = bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : [];
 
 	// Build send form
 	const sendForm = {
@@ -78,8 +80,8 @@ app.post('/external/send', async (c) => {
 		html: html || undefined,
 		text: text || undefined,
 	};
-	if (cc) sendForm.cc = Array.isArray(cc) ? cc : [cc];
-	if (bcc) sendForm.bcc = Array.isArray(bcc) ? bcc : [bcc];
+	if (ccList.length > 0) sendForm.cc = ccList;
+	if (bccList.length > 0) sendForm.bcc = bccList;
 	if (replyTo) sendForm.replyTo = replyTo;
 	if (headers) sendForm.headers = headers;
 	if (attachments && Array.isArray(attachments) && attachments.length > 0) {
@@ -136,6 +138,8 @@ app.post('/external/send', async (c) => {
 		type: emailConst.type.SEND,
 		resendEmailId: resendResult?.data?.id || null,
 		recipient: JSON.stringify(toList.map(addr => ({ address: addr, name: '' }))),
+		cc: JSON.stringify(ccList.map(addr => ({ address: addr, name: '' }))),
+		bcc: JSON.stringify(bccList.map(addr => ({ address: addr, name: '' }))),
 	};
 
 	const emailRow = await orm(c).insert(email).values(emailData).returning().get();

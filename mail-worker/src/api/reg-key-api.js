@@ -4,8 +4,8 @@ import regKeyService from '../service/reg-key-service';
 import userContext from '../security/user-context';
 
 app.post('/regKey/add', async (c) => {
-	await regKeyService.add(c, await c.req.json(), await userContext.getUserId(c));
-	return c.json(result.ok());
+	const data = await regKeyService.add(c, await c.req.json(), await userContext.getUserId(c));
+	return c.json(result.ok(data));
 })
 
 app.get('/regKey/list', async (c) => {

@@ -1,6 +1,6 @@
 import role from '../entity/role';
 import orm from '../entity/orm';
-import { eq, asc, inArray, and } from 'drizzle-orm';
+import { eq, ne, asc, inArray, and } from 'drizzle-orm';
 import BizError from '../error/biz-error';
 import rolePerm from '../entity/role-perm';
 import perm from '../entity/perm';
@@ -10,6 +10,20 @@ import user from '../entity/user';
 import verifyUtils from '../utils/verify-utils';
 import { t } from '../i18n/i18n.js';
 import emailUtils from '../utils/email-utils';
+
+const translateRoleValue = (group, value) => {
+	if (!value) return value;
+	const key = group + '.' + value;
+	const translated = t(key);
+	return translated === key ? value : translated;
+}
+
+export const applyRoleDisplay = (roleRow) => {
+	if (!roleRow) return roleRow;
+	roleRow.displayName = translateRoleValue('roles', roleRow.name);
+	roleRow.displayDescription = translateRoleValue('roleDescriptions', roleRow.description);
+	return roleRow;
+}
 
 const roleService = {
 
@@ -22,6 +36,10 @@ const roleService = {
 		}
 
 		let roleRow = await orm(c).select().from(role).where(eq(role.name, name)).get();
+
+		if (roleRow) {
+			throw new BizError(t('roleNameExist'));
+		}
 
 		const notEmailIndex = banEmail.findIndex(item => (!verifyUtils.isEmail(item) && !verifyUtils.isDomain(item)) && item !== "*");
 
@@ -57,6 +75,7 @@ const roleService = {
 			role.banEmail = role.banEmail.split(",").filter(item => item !== "");
 			role.availDomain = role.availDomain.split(",").filter(item => item !== "");
 			role.permIds = permList.filter(perm => perm.roleId === role.roleId).map(perm => perm.permId);
+			applyRoleDisplay(role);
 		});
 
 		return roleList;
@@ -71,6 +90,14 @@ const roleService = {
 		}
 
 		delete params.isDefault
+
+		const sameNameRole = await orm(c).select().from(role)
+			.where(and(eq(role.name, name), ne(role.roleId, roleId)))
+			.get();
+
+		if (sameNameRole) {
+			throw new BizError(t('roleNameExist'));
+		}
 
 		const notEmailIndex = banEmail.findIndex(item => (!verifyUtils.isEmail(item) && !verifyUtils.isDomain(item)) && item !== "*")
 
@@ -115,8 +142,14 @@ const roleService = {
 
 	},
 
-	roleSelectUse(c) {
-		return orm(c).select({ name: role.name, roleId: role.roleId, isDefault: role.isDefault }).from(role).orderBy(asc(role.sort)).all();
+	async roleSelectUse(c) {
+		const roleList = await orm(c).select({
+			name: role.name,
+			description: role.description,
+			roleId: role.roleId,
+			isDefault: role.isDefault
+		}).from(role).orderBy(asc(role.sort)).all();
+		return roleList.map(applyRoleDisplay);
 	},
 
 	async selectDefaultRole(c) {
@@ -132,8 +165,9 @@ const roleService = {
 		await orm(c).update(role).set({ isDefault: 1 }).where(eq(role.roleId, params.roleId)).run();
 	},
 
-	selectById(c, roleId) {
-		return orm(c).select().from(role).where(eq(role.roleId, roleId)).get();
+	async selectById(c, roleId) {
+		const roleRow = await orm(c).select().from(role).where(eq(role.roleId, roleId)).get();
+		return applyRoleDisplay(roleRow);
 	},
 
 	selectByIdsHasPermKey(c, types, permKey) {

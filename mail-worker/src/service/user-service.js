@@ -46,7 +46,11 @@ const userService = {
 		user.type = userRow.type;
 
 		if (c.env.admin === userRow.email) {
-			user.role = constant.ADMIN_ROLE
+			user.role = {
+				...constant.ADMIN_ROLE,
+				displayName: t('roles.admin'),
+				displayDescription: t('roleDescriptions.admin')
+			}
 			user.type = 0;
 		}
 
@@ -324,7 +328,7 @@ const userService = {
 			throw new BizError(t('isRegAccount'));
 		}
 
-		const role = roleService.selectById(c, type);
+		const role = await roleService.selectById(c, type);
 
 		if (!role) {
 			throw new BizError(t('roleNotExist'));

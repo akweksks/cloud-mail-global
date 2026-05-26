@@ -131,7 +131,7 @@ const publicService = {
 			let type = defRole.roleId;
 
 			if (roleName) {
-				const roleRow = roleList.find(role => role.name === roleName);
+				const roleRow = roleList.find(role => role.name === roleName || role.displayName === roleName);
 				type = roleRow ? roleRow.roleId : type;
 			}
 

@@ -198,16 +198,18 @@
                   </el-select>
                 </div>
               </div>
-              <div class="setting-item">
+              <div class="setting-item external-api-key-item">
                 <div>
                   <span>{{ $t('externalApiKey') }}</span>
                   <el-tooltip effect="dark" :content="$t('externalApiKeyDesc')">
                     <Icon class="warning" icon="fe:warning" width="18" height="18"/>
                   </el-tooltip>
                 </div>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                  <el-input v-model="setting.externalApiKey" size="small" style="width: 280px" :placeholder="$t('externalApiKeyPlaceholder')" readonly/>
-                  <el-button size="small" type="primary" @click="generateApiKey">{{ $t('generate') }}</el-button>
+                <div class="external-api-key-control">
+                  <el-input v-model="setting.externalApiKey" size="small" :placeholder="$t('externalApiKeyPlaceholder')" readonly/>
+                  <el-button class="external-api-generate" size="small" type="primary" @click="generateApiKey">
+                    {{ $t('generate') }}
+                  </el-button>
                 </div>
               </div>
               <div class="setting-item">
@@ -1671,6 +1673,49 @@ function editSetting(settingForm, refreshStatus = true) {
     grid-template-columns: 1fr auto;
     justify-items: flex-end;
     font-weight: normal;
+  }
+}
+
+.setting-item.external-api-key-item {
+  align-items: center;
+  grid-template-columns: max-content minmax(0, 1fr);
+
+  > div:first-child {
+    white-space: nowrap;
+  }
+
+  :deep(.el-input) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .external-api-generate {
+    min-width: 58px;
+    margin-left: 0;
+  }
+}
+
+.setting-item.external-api-key-item > .external-api-key-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  justify-items: stretch;
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 560px) {
+  .setting-item.external-api-key-item {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-item.external-api-key-item > .external-api-key-control {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-item.external-api-key-item .external-api-generate {
+    justify-self: flex-end;
   }
 }
 

@@ -18,7 +18,7 @@
         <el-table-column :label="$t('role')" prop="name" :min-width="roleWidth">
           <template #default="props">
             <div class="role-name">
-              <span>{{ props.row.name }}</span>
+              <span>{{ props.row.displayName || props.row.name }}</span>
               <span v-if="props.row.isDefault"><el-tag class="def-tag">{{ $t('default') }}</el-tag></span>
             </div>
           </template>
@@ -27,7 +27,7 @@
         <el-table-column v-if="desShow" :label="$t('description')" min-width="200" prop="description">
           <template #default="props">
             <div class="description">
-              <span>{{ props.row.description }}</span>
+              <span>{{ props.row.displayDescription || props.row.description }}</span>
             </div>
           </template>
         </el-table-column>
@@ -252,7 +252,7 @@ function setDef(role) {
 }
 
 function delRole(role) {
-  ElMessageBox.confirm(t('delConfirm', {msg: role.name}), {
+  ElMessageBox.confirm(t('delConfirm', {msg: role.displayName || role.name}), {
     confirmButtonText: t('confirm'),
     cancelButtonText: t('confirm'),
     type: 'warning'
@@ -297,6 +297,8 @@ function setRole() {
   }
 
   const params = {...form, roleId: chooseRole.roleId}
+  restoreRawRoleField(params, 'name', 'displayName')
+  restoreRawRoleField(params, 'description', 'displayDescription')
   const checkedId = tree.value.getCheckedKeys()
   const halfId = tree.value.getHalfCheckedKeys()
   params.permIds = [...checkedId, ...halfId]
@@ -340,8 +342,8 @@ function openRoleSet(role) {
   dialogType.type = 'set'
   roleFormShow.value = true
   form.sort = role.sort
-  form.name = role.name
-  form.description = role.description
+  form.name = getRoleDisplayName(role)
+  form.description = getRoleDisplayDescription(role)
   form.sendType = role.sendType
   form.sendCount = role.sendCount
   form.accountCount = role.accountCount
@@ -350,6 +352,20 @@ function openRoleSet(role) {
   nextTick(() => {
     tree.value.setCheckedKeys(role.permIds)
   })
+}
+
+function getRoleDisplayName(role) {
+  return role.displayName || role.name
+}
+
+function getRoleDisplayDescription(role) {
+  return role.displayDescription || role.description
+}
+
+function restoreRawRoleField(params, rawKey, displayKey) {
+  if (chooseRole[displayKey] && chooseRole[rawKey] !== chooseRole[displayKey] && params[rawKey] === chooseRole[displayKey]) {
+    params[rawKey] = chooseRole[rawKey]
+  }
 }
 
 

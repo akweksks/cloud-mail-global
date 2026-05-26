@@ -21,9 +21,12 @@ const cfEmailService = {
 		}
 
 		const recipients = Array.isArray(form.to) ? form.to : [form.to];
-		if (recipients.length > 50) {
+		const cc = form.cc ? (Array.isArray(form.cc) ? form.cc : [form.cc]) : [];
+		const bcc = form.bcc ? (Array.isArray(form.bcc) ? form.bcc : [form.bcc]) : [];
+		const totalRecipients = recipients.length + cc.length + bcc.length;
+		if (totalRecipients > 50) {
 			const err = new Error(
-				`CF Email: ${recipients.length} recipients exceeds the 50-recipient limit`
+				`CF Email: ${totalRecipients} recipients exceeds the 50-recipient limit`
 			);
 			err.code = 'E_TOO_MANY_RECIPIENTS';
 			throw err;
@@ -42,6 +45,8 @@ const cfEmailService = {
 			subject: form.subject,
 		};
 
+		if (cc.length > 0) message.cc = cc.length === 1 ? cc[0] : cc;
+		if (bcc.length > 0) message.bcc = bcc.length === 1 ? bcc[0] : bcc;
 		if (form.html) message.html = form.html;
 		if (form.text) message.text = form.text;
 		if (form.headers) message.headers = { ...form.headers };

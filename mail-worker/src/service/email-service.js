@@ -23,6 +23,30 @@ import account from "../entity/account";
 import { att } from '../entity/att';
 import telegramService from './telegram-service';
 
+function normalizeAddressList(value) {
+	if (!value) return [];
+	const list = Array.isArray(value) ? value : [value];
+	return list
+		.map(item => String(item || '').trim())
+		.filter(Boolean);
+}
+
+function uniqueAddressList(list, seen = new Set()) {
+	const result = [];
+	for (const item of list) {
+		const key = item.toLowerCase();
+		if (!seen.has(key)) {
+			seen.add(key);
+			result.push(item);
+		}
+	}
+	return result;
+}
+
+function toRecipientJson(list) {
+	return JSON.stringify(list.map(item => ({ address: item, name: '' })));
+}
+
 const emailService = {
 
 	async list(c, params, userId) {
@@ -158,11 +182,31 @@ const emailService = {
 			sendType, //发件类型
 			emailId, //邮件id，如果是回复邮件会带
 			receiveEmail, //收件人邮箱
+			cc,
+			bcc,
+			manyType,
 			text, //邮件纯文本
 			content, //邮件内容
 			subject, //邮件标题
 			attachments //附件
 		} = params;
+
+		const seenRecipients = new Set();
+		receiveEmail = uniqueAddressList(normalizeAddressList(receiveEmail), seenRecipients);
+		cc = uniqueAddressList(normalizeAddressList(cc), seenRecipients);
+		bcc = uniqueAddressList(normalizeAddressList(bcc), seenRecipients);
+		attachments = attachments || [];
+
+		const deliveryRecipients = [...receiveEmail, ...cc, ...bcc];
+		const isSeparateSend = manyType === 'divide' && receiveEmail.length > 1;
+
+		if (receiveEmail.length === 0) {
+			throw new BizError(t('emptyEmail'));
+		}
+
+		if (isSeparateSend && attachments.length > 0) {
+			throw new BizError(t('noSeparateSendMsg'));
+		}
 
 		const { resendTokens, r2Domain, send, domainList, emailProvider } = await settingService.query(c);
 
@@ -177,7 +221,7 @@ const emailService = {
 		const roleRow = await roleService.selectById(c, userRow.type);
 
 		//判断接收方是不是全部为站内邮箱
-		const allInternal = receiveEmail.every(email => {
+		const allInternal = deliveryRecipients.every(email => {
 			const domain = '@' + emailUtils.getDomain(email);
 			return domainList.includes(domain);
 		});
@@ -204,7 +248,7 @@ const emailService = {
 				if (roleRow.sendType === 'count') throw new BizError(t('totalSendLimit'), 403);
 			}
 
-			if (userRow.sendCount + receiveEmail.length > roleRow.sendCount) {
+			if (userRow.sendCount + deliveryRecipients.length > roleRow.sendCount) {
 				if (roleRow.sendType === 'day') throw new BizError(t('daySendLack'), 403);
 				if (roleRow.sendType === 'count') throw new BizError(t('totalSendLack'), 403);
 			}
@@ -257,59 +301,74 @@ const emailService = {
 
 		}
 
-		let resendResult = {};
-		let cfSent = false;
+		const sendItems = isSeparateSend
+			? receiveEmail.map(item => ({
+				to: [item],
+				delivery: uniqueAddressList([item, ...cc, ...bcc])
+			}))
+			: [{
+				to: receiveEmail,
+				delivery: deliveryRecipients
+			}];
 
 		//存在站外时发送邮件：优先CF Email Service，失败后回退Resend
 		if (!allInternal) {
 
-			const sendForm = {
-				from: `${name} <${accountRow.email}>`,
-				to: [...receiveEmail],
-				subject: subject,
-				text: text,
-				html: html,
-				attachments: [...imageDataList, ...attachments]
-			};
-
-			if (sendType === 'reply') {
-				sendForm.headers = {
-					'in-reply-to': emailRow.messageId,
-					'references': emailRow.messageId
-				};
-			}
-
 			const useCf = emailProvider !== settingConst.emailProvider.RESEND_ONLY;
 			const useResend = emailProvider !== settingConst.emailProvider.CF_ONLY;
+			const resend = resendToken ? new Resend(resendToken) : null;
 
-			//尝试CF Email Service发送
-			if (useCf && receiveEmail.length <= 50) {
-				try {
-					await cfEmailService.send(c.env, sendForm);
-					cfSent = true;
-				} catch (cfError) {
-					console.error(`[CF Email] failed: code=${cfError.code || 'none'} msg=${cfError.message}`);
-					if (!useResend) {
-						throw new BizError(`CF Email failed: ${cfError.message}`);
+			for (const item of sendItems) {
+				const sendForm = {
+					from: `${name} <${accountRow.email}>`,
+					to: [...item.to],
+					subject: subject,
+					text: text,
+					html: html,
+					attachments: [...imageDataList, ...attachments]
+				};
+
+				if (cc.length > 0) sendForm.cc = [...cc];
+				if (bcc.length > 0) sendForm.bcc = [...bcc];
+
+				if (sendType === 'reply') {
+					sendForm.headers = {
+						'in-reply-to': emailRow.messageId,
+						'references': emailRow.messageId
+					};
+				}
+
+				item.resendResult = {};
+				item.cfSent = false;
+
+				//尝试CF Email Service发送
+				if (useCf && item.delivery.length <= 50) {
+					try {
+						await cfEmailService.send(c.env, sendForm);
+						item.cfSent = true;
+					} catch (cfError) {
+						console.error(`[CF Email] failed: code=${cfError.code || 'none'} msg=${cfError.message}`);
+						if (!useResend) {
+							throw new BizError(`CF Email failed: ${cfError.message}`);
+						}
 					}
 				}
-			}
 
-			//CF失败或不可用时回退Resend
-			if (!cfSent) {
-				if (!resendToken) {
-					throw new BizError(t('noResendToken'));
+				//CF失败或不可用时回退Resend
+				if (!item.cfSent) {
+					if (!resend) {
+						throw new BizError(t('noResendToken'));
+					}
+					item.resendResult = await resend.emails.send(sendForm);
 				}
-				const resend = new Resend(resendToken);
-				resendResult = await resend.emails.send(sendForm);
+
+				const { error } = item.resendResult;
+
+				if (error) {
+					throw new BizError(error.message);
+				}
 			}
 
-		}
-
-		const { data, error } = resendResult;
-
-		if (error) {
-			throw new BizError(error.message);
 		}
 
 		imageDataList = imageDataList.map(item => ({...item, contentId: `<${item.contentId}>`}))
@@ -317,62 +376,64 @@ const emailService = {
 		//把图片标签cid标签切换会通用url
 		html = this.imgReplace(html, imageDataList, r2Domain);
 
-		//封装数据保存到数据库
-		const emailData = {};
-		emailData.sendEmail = accountRow.email;
-		emailData.name = name;
-		emailData.subject = subject;
-		emailData.content = html;
-		emailData.text = text;
-		emailData.accountId = accountId;
-		emailData.status = cfSent ? emailConst.status.DELIVERED : emailConst.status.SENT;
-		emailData.type = emailConst.type.SEND;
-		emailData.userId = userId;
-		emailData.resendEmailId = data?.id;
-
-		const recipient = [];
-
-		receiveEmail.forEach(item => {
-			recipient.push({ address: item, name: '' });
-		});
-
-		emailData.recipient = JSON.stringify(recipient);
-
-		if (sendType === 'reply') {
-			emailData.inReplyTo = emailRow.messageId;
-			emailData.relation = emailRow.messageId;
-		}
-
 		//如果权限有发送次数增加用户发送次数
 		if (roleRow.sendCount && roleRow.sendType !== 'internal') {
-			await userService.incrUserSendCount(c, receiveEmail.length, userId);
+			await userService.incrUserSendCount(c, deliveryRecipients.length, userId);
 		}
 
-		//保存到数据库并返回结果
-		const emailResult = await orm(c).insert(email).values(emailData).returning().get();
+		const emailResults = [];
 
-		//保存内嵌附件
-		if (imageDataList.length > 0) {
-			if (imageDataList.length > 10) {
-				throw new BizError(t('imageAttLimit'));
+		for (const item of sendItems) {
+			const { data } = item.resendResult || {};
+			//封装数据保存到数据库
+			const emailData = {};
+			emailData.sendEmail = accountRow.email;
+			emailData.name = name;
+			emailData.subject = subject;
+			emailData.content = html;
+			emailData.text = text;
+			emailData.accountId = accountId;
+			emailData.status = item.cfSent ? emailConst.status.DELIVERED : emailConst.status.SENT;
+			emailData.type = emailConst.type.SEND;
+			emailData.userId = userId;
+			emailData.resendEmailId = data?.id;
+			emailData.recipient = toRecipientJson(item.to);
+			emailData.cc = toRecipientJson(cc);
+			emailData.bcc = toRecipientJson(bcc);
+
+			if (sendType === 'reply') {
+				emailData.inReplyTo = emailRow.messageId;
+				emailData.relation = emailRow.messageId;
 			}
-			await attService.saveArticleAtt(c, imageDataList, userId, accountId, emailResult.emailId);
-		}
 
-		//保存普通附件
-		if (attachments?.length > 0) {
-			if (attachments.length > 10) {
-				throw new BizError(t('attLimit'));
+			//保存到数据库并返回结果
+			const emailResult = await orm(c).insert(email).values(emailData).returning().get();
+
+			//保存内嵌附件
+			if (imageDataList.length > 0) {
+				if (imageDataList.length > 10) {
+					throw new BizError(t('imageAttLimit'));
+				}
+				await attService.saveArticleAtt(c, imageDataList.map(att => ({...att})), userId, accountId, emailResult.emailId);
 			}
-			await attService.saveSendAtt(c, attachments, userId, accountId, emailResult.emailId);
-		}
 
-		const attList = await attService.selectByEmailIds(c, [emailResult.emailId]);
-		emailResult.attList = attList;
+			//保存普通附件
+			if (attachments?.length > 0) {
+				if (attachments.length > 10) {
+					throw new BizError(t('attLimit'));
+				}
+				await attService.saveSendAtt(c, attachments, userId, accountId, emailResult.emailId);
+			}
 
-		//如果全是站内接收方，直接写入数据库
-		if (allInternal) {
-			await this.HandleOnSiteEmail(c, receiveEmail, emailResult, attList);
+			const attList = await attService.selectByEmailIds(c, [emailResult.emailId]);
+			emailResult.attList = attList;
+
+			//如果全是站内接收方，直接写入数据库
+			if (allInternal) {
+				await this.HandleOnSiteEmail(c, item.delivery, emailResult, attList);
+			}
+
+			emailResults.push(emailResult);
 		}
 
 		const dateStr = dayjs().format('YYYY-MM-DD');
@@ -380,13 +441,13 @@ const emailService = {
 
 		//记录每天发件次数统计
 		if (!daySendTotal) {
-			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(receiveEmail.length), { expirationTtl: 60 * 60 * 24 });
+			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(deliveryRecipients.length), { expirationTtl: 60 * 60 * 24 });
 		} else  {
-			daySendTotal = Number(daySendTotal) + receiveEmail.length
+			daySendTotal = Number(daySendTotal) + deliveryRecipients.length
 			await c.env.kv.put(kvConst.SEND_DAY_COUNT + dateStr, JSON.stringify(daySendTotal), { expirationTtl: 60 * 60 * 24 });
 		}
 
-		return [ emailResult ];
+		return emailResults;
 	},
 
 	//处理站内邮件发送
@@ -412,6 +473,7 @@ const emailService = {
 			emailValues.type = emailConst.type.RECEIVE;
 			emailValues.toEmail = email;
 			emailValues.toName = emailUtils.getName(email);
+			emailValues.bcc = '[]';
 			emailValues.emailId = null;
 
 			const accountRow = accountList.find(accountRow => accountRow.email === email);

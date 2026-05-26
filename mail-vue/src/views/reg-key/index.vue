@@ -62,23 +62,51 @@
     </el-scrollbar>
     <el-dialog v-model="showAdd" :title="$t('addRegKey')">
       <div class="container">
-        <el-input v-model="addForm.code" :placeholder="$t('regKey')">
+        <el-radio-group v-model="addForm.mode" class="mode-group">
+          <el-radio-button :label="$t('regKeyModeReusable')" value="single"/>
+          <el-radio-button :label="$t('regKeyModeBatch')" value="batch"/>
+        </el-radio-group>
+        <el-input v-if="addForm.mode === 'single'" v-model="addForm.code" :placeholder="$t('regKey')">
           <template #suffix>
             <Icon @click.stop="genCode" class="gen-code" icon="bitcoin-icons:refresh-filled" width="24" height="24"/>
           </template>
         </el-input>
         <el-select v-model="addForm.roleId" :placeholder="$t('roleDesc')">
-          <el-option v-for="item in roleList" :label="item.name" :value="item.roleId" :key="item.roleId"/>
+          <el-option v-for="item in roleList" :label="item.displayName || item.name" :value="item.roleId" :key="item.roleId"/>
         </el-select>
         <el-date-picker
             v-model="addForm.expireTime"
             type="date"
             :placeholder="$t('validUntil')"
         />
-        <el-input-number v-model="addForm.count" :min="1" :max="99999"/>
+        <el-input-number
+            v-if="addForm.mode === 'single'"
+            v-model="addForm.count"
+            :min="1"
+            :max="99999"
+            :placeholder="$t('availableCount')"
+        />
+        <el-input-number
+            v-else
+            v-model="addForm.batchCount"
+            :min="1"
+            :max="500"
+            :placeholder="$t('batchRegKeyCount')"
+        />
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
         >{{ $t('add') }}
         </el-button>
+      </div>
+    </el-dialog>
+    <el-dialog v-model="showGeneratedCodes" :title="$t('generatedRegKeys')" class="generated-codes-dialog">
+      <el-input
+          :model-value="generatedCodesText"
+          type="textarea"
+          :rows="10"
+          readonly
+      />
+      <div class="generated-actions">
+        <el-button type="primary" @click="copyGeneratedCodes">{{ $t('copyAll') }}</el-button>
       </div>
     </el-dialog>
     <el-dialog class="history-list" v-model="showRegKeyHistory" :title="$t('useHistory')">
@@ -96,7 +124,7 @@
 </template>
 
 <script setup>
-import {defineOptions, nextTick, reactive, ref, watch} from "vue"
+import {computed, defineOptions, nextTick, reactive, ref, watch} from "vue"
 import {Icon} from "@iconify/vue";
 import loading from "@/components/loading/index.vue";
 import {useSettingStore} from "@/store/setting.js";
@@ -125,20 +153,25 @@ const showAdd = ref(false)
 const regKeyLoading = ref(true)
 const regKeyFirst = ref(true)
 const showRegKeyHistory = ref(false)
+const showGeneratedCodes = ref(false)
 const historyList = reactive([])
+const generatedCodes = ref([])
 const emailColumnWidth = ref(0)
 const createTimeColumnWidth = ref(0)
 const historyLoading = ref(false)
 const isMobile = window.innerWidth < 1025
 
 const addForm = reactive({
+  mode: 'single',
   code: '',
   count: 1,
+  batchCount: 10,
   roleId: null,
   expireTime: null
 })
 
 const regKeyData = reactive([])
+const generatedCodesText = computed(() => generatedCodes.value.join('\n'))
 
 getList(true)
 
@@ -276,6 +309,24 @@ async function copyCode(code) {
   }
 }
 
+async function copyGeneratedCodes() {
+  try {
+    await navigator.clipboard.writeText(generatedCodesText.value);
+    ElMessage({
+      message: t('copySuccessMsg'),
+      type: 'success',
+      plain: true,
+    })
+  } catch (err) {
+    console.error('复制失败:', err);
+    ElMessage({
+      message: t('copyFailMsg'),
+      type: 'error',
+      plain: true,
+    })
+  }
+}
+
 function genCode() {
   addForm.code = generateRandomCode()
 }
@@ -308,9 +359,9 @@ function clearNotUse() {
 
 function submit() {
 
-  if (!addForm.code) {
+  if (addForm.mode === 'single' && !addForm.code) {
     ElMessage({
-      message: $('emptyRegKeyMsg'),
+      message: t('emptyRegKeyMsg'),
       type: "error",
       plain: true
     })
@@ -335,7 +386,7 @@ function submit() {
     return
   }
 
-  if (!addForm.count) {
+  if (addForm.mode === 'single' && !addForm.count) {
     ElMessage({
       message: t('emptyCountMsg'),
       type: "error",
@@ -344,8 +395,28 @@ function submit() {
     return
   }
 
+  if (addForm.mode === 'batch' && !addForm.batchCount) {
+    ElMessage({
+      message: t('emptyBatchCountMsg'),
+      type: "error",
+      plain: true
+    })
+    return
+  }
+
+  const payload = {...addForm}
+  if (payload.mode === 'batch') {
+    delete payload.code
+    payload.count = 1
+  }
+
   addLoading.value = true
-  regKeyAdd(addForm).then(() => {
+  regKeyAdd(payload).then((data) => {
+    const codes = data?.codes || []
+    if (payload.mode === 'batch' && codes.length > 0) {
+      generatedCodes.value = codes
+      showGeneratedCodes.value = true
+    }
     showAdd.value = false
     resetForm()
     ElMessage({
@@ -377,10 +448,16 @@ function deleteRegKey(regKey) {
 }
 
 function resetForm() {
+  addForm.mode = 'single'
   addForm.code = ''
+  addForm.count = 1
+  addForm.batchCount = 10
+  addForm.roleId = null
+  addForm.expireTime = null
 }
 
 function openAdd() {
+  resetForm()
   genCode()
   showAdd.value = true
 }
@@ -511,6 +588,24 @@ function openAdd() {
   display: grid;
   grid-template-columns: 1fr;
   gap: 15px;
+}
+
+.mode-group {
+  width: 100%;
+
+  :deep(.el-radio-button) {
+    width: 50%;
+  }
+
+  :deep(.el-radio-button__inner) {
+    width: 100%;
+  }
+}
+
+.generated-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 :deep(.el-dialog) {
