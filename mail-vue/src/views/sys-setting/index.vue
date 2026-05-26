@@ -852,7 +852,7 @@ defineOptions({
 const currentVersion = 'v3.0.0-global'
 const PROJECT_REPO_URL = import.meta.env.VITE_PROJECT_REPO || 'https://github.com/akweksks/cloud-mail-global'
 const PROJECT_RELEASES_URL = `${PROJECT_REPO_URL}/releases`
-const PROJECT_SUPPORT_URL = `${PROJECT_REPO_URL}/blob/main/doc/demo/Buy-me-a-coffee-WeChat.JPG`
+const PROJECT_SUPPORT_URL = `${PROJECT_REPO_URL}/blob/main/doc/demo/Buy-me-a-coffee-alipay.jpg`
 const PROJECT_DOC_URL = `${PROJECT_REPO_URL}/blob/main/docs/external-api-guide.md`
 const PROJECT_RELEASE_API_URL = import.meta.env.VITE_PROJECT_RELEASE_API || ''
 const hasUpdate = ref(false)
