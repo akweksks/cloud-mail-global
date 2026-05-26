@@ -5,6 +5,7 @@ import userContext from '../security/user-context';
 import attService from '../service/att-service';
 import starService from '../service/star-service';
 import emlService from '../service/eml-service';
+import scheduledEmailService from '../service/scheduled-email-service';
 import { buildZip } from '../utils/zip-utils';
 import orm from '../entity/orm';
 import email from '../entity/email';
@@ -57,6 +58,11 @@ app.get('/email/attList', async (c) => {
 app.post('/email/send', async (c) => {
 	const email = await emailService.send(c, await c.req.json(), userContext.getUserId(c));
 	return c.json(result.ok(email));
+});
+
+app.post('/email/schedule', async (c) => {
+	const schedule = await scheduledEmailService.create(c, await c.req.json(), userContext.getUserId(c));
+	return c.json(result.ok(schedule));
 });
 
 app.put('/email/read', async (c) => {
@@ -127,4 +133,3 @@ app.get('/email/batchExport', async (c) => {
 		},
 	});
 })
-

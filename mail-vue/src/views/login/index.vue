@@ -49,31 +49,38 @@
           </el-button>
         </div>
         <div v-show="show !== 'login'">
-          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
-                    autocomplete="off">
-            <template #append v-if="!hideLoginDomain">
-              <div @click.stop="openSelect">
-                <el-select
-                    v-if="show !== 'login'"
-                    ref="mySelect"
-                    v-model="suffix"
-                    :placeholder="$t('select')"
-                    class="select"
-                >
-                  <el-option
-                      v-for="item in domainList"
-                      :key="item"
-                      :label="item"
-                      :value="item"
-                  />
-                </el-select>
-                <div>
-                  <span>{{ suffix }}</span>
-                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+          <div class="prefix-field">
+            <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="registerForm.email" type="text" :placeholder="$t('emailAccount')"
+                      autocomplete="off">
+              <template #append v-if="!hideLoginDomain">
+                <div @click.stop="openSelect">
+                  <el-select
+                      v-if="show !== 'login'"
+                      ref="mySelect"
+                      v-model="suffix"
+                      :placeholder="$t('select')"
+                      class="select"
+                  >
+                    <el-option
+                        v-for="item in domainList"
+                        :key="item"
+                        :label="item"
+                        :value="item"
+                    />
+                  </el-select>
+                  <div>
+                    <span>{{ suffix }}</span>
+                    <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                  </div>
                 </div>
-              </div>
-            </template>
-          </el-input>
+              </template>
+            </el-input>
+            <random-prefix-tools
+                v-model="registerForm.email"
+                :min-length="settingStore.settings.minEmailPrefix"
+                :full-email-domain="randomPrefixDomain"
+            />
+          </div>
           <el-input v-model="registerForm.password" :placeholder="$t('password')" type="password" autocomplete="off"/>
           <el-input v-model="registerForm.confirmPassword" :placeholder="$t('confirmPwd')" type="password"
                     autocomplete="off"/>
@@ -108,29 +115,36 @@
     </div>
     <el-dialog class="bind-dialog" v-model="showBindForm"  title="注册邮箱" >
       <div class="bind-container">
-        <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-          <template #append v-if="!hideLoginDomain">
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+        <div class="prefix-field">
+          <el-input :class="!hideLoginDomain ? 'email-input' : ''" v-model="bindForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+            <template #append v-if="!hideLoginDomain">
+              <div @click.stop="openSelect">
+                <el-select
+                    ref="mySelect"
+                    v-model="suffix"
+                    :placeholder="$t('select')"
+                    class="select"
+                >
+                  <el-option
+                      v-for="item in domainList"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                  />
+                </el-select>
+                <div>
+                  <span>{{ suffix }}</span>
+                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                </div>
               </div>
-            </div>
-          </template>
-        </el-input>
+            </template>
+          </el-input>
+          <random-prefix-tools
+              v-model="bindForm.email"
+              :min-length="settingStore.settings.minEmailPrefix"
+              :full-email-domain="randomPrefixDomain"
+          />
+        </div>
         <el-input v-if="settingStore.settings.regKey === 0" v-model="bindForm.code" :placeholder="$t('regKey')"
                   type="text" autocomplete="off"/>
         <el-input v-if="settingStore.settings.regKey === 2" v-model="bindForm.code"
@@ -163,6 +177,7 @@ import {loginUserInfo} from "@/request/my.js";
 import {permsToRouter} from "@/perm/perm.js";
 import {useI18n} from "vue-i18n";
 import {oauthBindUser, oauthLinuxDoLogin} from "@/request/ouath.js";
+import RandomPrefixTools from "@/components/random-prefix-tools/index.vue";
 
 const PROJECT_REPO_URL = import.meta.env.VITE_PROJECT_REPO || 'https://github.com/akweksks/cloud-mail-global'
 const {t} = useI18n();
@@ -245,6 +260,7 @@ const loginDarkenFactor = computed(() => {
 })
 
 const hideLoginDomain = computed(() => settingStore.settings.loginDomain === 1)
+const randomPrefixDomain = computed(() => hideLoginDomain.value ? (domainList[0] || suffix.value || '') : '')
 
 const background = computed(() => {
   const bg = settingStore.settings.background
@@ -680,6 +696,14 @@ function submitRegister() {
     background: var(--el-bg-color);
   }
 
+  .prefix-field {
+    margin-bottom: 18px;
+
+    .el-input {
+      margin-bottom: 8px;
+    }
+  }
+
   .el-input {
     height: 38px;
     width: 100%;
@@ -708,6 +732,11 @@ function submitRegister() {
   display: grid;
   grid-template-columns: 1fr;
   gap: 15px;
+
+  .prefix-field {
+    display: grid;
+    gap: 8px;
+  }
 }
 
 .setting-icon {

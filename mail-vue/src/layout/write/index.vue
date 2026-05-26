@@ -29,7 +29,9 @@
               :placeholder="$t('recipientPastePlaceholder')"
           >
             <template #prefix>
-              <div class="item-title" >{{ $t('recipient') }}</div>
+              <div class="address-title">
+                <span class="item-title">{{ $t('recipient') }}</span>
+              </div>
               <el-select
                   ref="mySelect"
                   class="write-select"
@@ -51,27 +53,32 @@
             </template>
             <template #suffix>
               <div class="address-actions">
-                <button
+                <span v-if="recipientTotalCount > 0" class="recipient-count-hint">
+                  {{ recipientCountText }}
+                </span>
+                <el-button
                     v-if="!showCc && form.cc.length === 0"
                     class="optional-toggle"
-                    type="button"
+                    type="primary"
+                    link
                     @click.stop="showOptionalRecipient('cc')"
                 >
                   {{ $t('cc') }}
-                </button>
-                <button
+                </el-button>
+                <el-button
                     v-if="!showBcc && form.bcc.length === 0"
                     class="optional-toggle"
-                    type="button"
+                    type="primary"
+                    link
                     @click.stop="showOptionalRecipient('bcc')"
                 >
                   {{ $t('bcc') }}
-                </button>
+                </el-button>
                 <el-tooltip :content="$t('separateSend')" placement="top">
                   <el-button
                       class="separate-send-btn"
-                      :type="form.manyType === 'divide' ? 'primary' : 'default'"
-                      :plain="form.manyType !== 'divide'"
+                      :type="form.manyType === 'divide' ? 'primary' : 'info'"
+                      link
                       size="small"
                       @click.stop="toggleSeparateSend"
                   >
@@ -98,7 +105,9 @@
               :placeholder="$t('ccPastePlaceholder')"
           >
             <template #prefix>
-              <div class="item-title" >{{ $t('cc') }}</div>
+              <div class="address-title">
+                <span class="item-title">{{ $t('cc') }}</span>
+              </div>
             </template>
             <template #suffix>
               <div class="address-actions optional-row-actions">
@@ -125,7 +134,9 @@
               :placeholder="$t('bccPastePlaceholder')"
           >
             <template #prefix>
-              <div class="item-title" >{{ $t('bcc') }}</div>
+              <div class="address-title">
+                <span class="item-title">{{ $t('bcc') }}</span>
+              </div>
             </template>
             <template #suffix>
               <div class="address-actions optional-row-actions">
@@ -157,7 +168,11 @@
                     width="22" height="22"/>
             </div>
           </div>
-          <div>
+          <div class="send-actions">
+            <el-button plain @click="openScheduleDialog">
+              <Icon icon="mdi:clock-time-four-outline" width="16" height="16"/>
+              <span>{{ $t('scheduleSend') }}</span>
+            </el-button>
             <el-button type="primary" @click="sendEmail" v-if="form.sendType === 'reply'">{{ $t('reply') }}</el-button>
             <el-button type="primary" @click="sendEmail" v-else-if="form.sendType === 'forward'">{{ $t('forward') }}</el-button>
             <el-button type="primary" @click="sendEmail" v-else>{{ $t('send') }}</el-button>
@@ -186,6 +201,20 @@
         <el-button type="primary" @click="chooseContact">{{t('selectContacts')}}</el-button>
       </div>
     </el-dialog>
+    <el-dialog class="schedule-send-dialog" v-model="scheduleShow" :title="t('scheduleSendTitle')">
+      <div class="schedule-send-box">
+        <el-date-picker
+            v-model="scheduleTime"
+            type="datetime"
+            :placeholder="t('scheduleTime')"
+            format="YYYY-MM-DD HH:mm"
+            :disabled-date="disabledScheduleDate"
+        />
+        <el-button class="btn" type="primary" :loading="scheduleLoading" @click="confirmScheduleEmail">
+          {{ t('scheduleConfirm') }}
+        </el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 <script setup>
@@ -193,7 +222,7 @@ import tinyEditor from '@/components/tiny-editor/index.vue'
 import {h, nextTick, onMounted, onUnmounted, reactive, ref, toRaw, computed} from "vue";
 import {Icon} from "@iconify/vue";
 import {useUserStore} from "@/store/user.js";
-import {emailSend} from "@/request/email.js";
+import {emailSchedule, emailSend} from "@/request/email.js";
 import {isEmail} from "@/utils/verify-utils.js";
 import {useAccountStore} from "@/store/account.js";
 import {useEmailStore} from "@/store/email.js";
@@ -233,6 +262,9 @@ let sending = false
 const defValue = ref('')
 const contactsTabRef = ref({})
 const showContacts = ref(false)
+const scheduleShow = ref(false)
+const scheduleTime = ref(null)
+const scheduleLoading = ref(false)
 const mySelect = ref()
 let selectStatus = false
 const backReply = reactive({
@@ -269,6 +301,13 @@ const recipientDelimiter = /[,;，；、\n\r]+/
 const recipientFields = ['receiveEmail', 'cc', 'bcc']
 
 const contacts = computed(() => writerStore.sendRecipientRecord.map(item => ({email: item})))
+const recipientTotalCount = computed(() => recipientFields.reduce((total, field) => total + form[field].length, 0))
+const recipientCountText = computed(() => {
+  if (recipientTotalCount.value === form.receiveEmail.length) {
+    return t('recipientToCount', {count: form.receiveEmail.length})
+  }
+  return `${t('recipientToCount', {count: form.receiveEmail.length})} / ${t('recipientTotalCount', {count: recipientTotalCount.value})}`
+})
 
 function showOptionalRecipient(field) {
   if (field === 'cc') showCc.value = true
@@ -483,15 +522,14 @@ function chooseFile() {
   }
 }
 
-async function sendEmail() {
-
+function prepareEmailContent() {
   if (form.receiveEmail.length === 0) {
     ElMessage({
       message: t('emptyRecipientMsg'),
       type: 'error',
       plain: true,
     })
-    return
+    return false
   }
 
   if (!form.subject) {
@@ -500,7 +538,7 @@ async function sendEmail() {
       type: 'error',
       plain: true,
     })
-    return
+    return false
   }
 
   if (!form.content) {
@@ -513,7 +551,7 @@ async function sendEmail() {
       type: 'error',
       plain: true,
     })
-    return
+    return false
   }
 
   if (form.manyType === 'divide' && form.attachments.length > 0) {
@@ -522,8 +560,15 @@ async function sendEmail() {
       type: 'error',
       plain: true,
     })
-    return
+    return false
   }
+
+  return true
+}
+
+async function sendEmail() {
+
+  if (!prepareEmailContent()) return
 
   if (sending) {
     ElMessage({
@@ -565,14 +610,7 @@ async function sendEmail() {
 
     addRecipientRecord();
 
-    if (form.draftId) {
-      form.subject = ''
-      form.content = ''
-      form.receiveEmail = []
-      form.cc = []
-      form.bcc = []
-      draftStore.setDraft = {...toRaw(form)}
-    }
+    removeSentDraft()
 
     show.value = false
     resetForm();
@@ -593,6 +631,108 @@ async function sendEmail() {
     percentMessage.close()
     percent.value = 0
     sending = false
+  })
+}
+
+function removeSentDraft() {
+  if (!form.draftId) return
+  form.subject = ''
+  form.content = ''
+  form.receiveEmail = []
+  form.cc = []
+  form.bcc = []
+  draftStore.setDraft = {...toRaw(form)}
+}
+
+function openScheduleDialog() {
+  if (sending) {
+    ElMessage({
+      message: t('sendingErrorMsg'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
+  if (!scheduleTime.value) {
+    scheduleTime.value = dayjs().add(10, 'minute').second(0).millisecond(0).toDate()
+  }
+  scheduleShow.value = true
+}
+
+function disabledScheduleDate(time) {
+  return dayjs(time).isBefore(dayjs().startOf('day'))
+}
+
+async function confirmScheduleEmail() {
+  if (!prepareEmailContent()) return
+
+  if (!scheduleTime.value) {
+    ElMessage({
+      message: t('scheduleTimeRequired'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
+  const scheduleAt = dayjs(scheduleTime.value)
+  if (!scheduleAt.isValid() || !scheduleAt.isAfter(dayjs())) {
+    ElMessage({
+      message: t('scheduleTimeFuture'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
+  if (form.attachments.length > 0) {
+    ElMessage({
+      message: t('noScheduledSendAttMsg'),
+      type: 'error',
+      plain: true,
+    })
+    return
+  }
+
+  if (scheduleLoading.value) return
+  scheduleLoading.value = true
+
+  const payload = {
+    ...toRaw(form),
+    receiveEmail: [...form.receiveEmail],
+    cc: [...form.cc],
+    bcc: [...form.bcc],
+    attachments: [...form.attachments],
+    scheduledTime: scheduleAt.utc().format('YYYY-MM-DD HH:mm:ss')
+  }
+
+  emailSchedule(payload).then(() => {
+    ElNotification({
+      title: t('scheduleSuccessMsg'),
+      type: "success",
+      message: h('span', {style: 'color: teal'}, t('schedulePendingMsg', {time: scheduleAt.format('YYYY-MM-DD HH:mm')})),
+      position: 'bottom-right'
+    })
+
+    addRecipientRecord()
+    removeSentDraft()
+    scheduleShow.value = false
+    show.value = false
+    resetForm()
+  }).catch((e) => {
+    ElNotification({
+      title: t('sendFailMsg'),
+      type: e.code === 403 ? 'warning' : 'error',
+      message: h('span', {style: 'color: teal'}, e.message),
+      position: 'bottom-right'
+    })
+    if (e.code === 401) {
+      localStorage.removeItem('token');
+      router.replace('/login');
+    }
+  }).finally(() => {
+    scheduleLoading.value = false
   })
 }
 
@@ -619,6 +759,8 @@ function resetForm() {
   form.sendType = ''
   form.emailId = 0
   form.draftId = null
+  scheduleTime.value = null
+  scheduleShow.value = false
   backReply.content = ''
   backReply.subject = ''
   backReply.receiveEmail = []
@@ -923,6 +1065,12 @@ function close() {
         flex-shrink: 0;
       }
 
+      .address-title {
+        display: flex;
+        align-items: center;
+        min-width: 64px;
+      }
+
       .address-panel {
         display: grid;
         gap: 6px;
@@ -931,26 +1079,24 @@ function close() {
       .address-actions {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         margin-right: 3px;
       }
 
-      .optional-toggle {
-        border: 0;
-        background: transparent;
-        color: var(--el-color-primary);
-        cursor: pointer;
-        font-size: 13px;
-        height: 28px;
-        padding: 0 3px;
+      .recipient-count-hint {
+        color: var(--el-text-color-secondary);
+        font-size: 12px;
+        white-space: nowrap;
       }
 
-      .optional-toggle:hover {
-        color: var(--el-color-primary-light-3);
+      .optional-toggle {
+        font-size: 13px;
+        height: 28px;
+        padding: 0 2px;
       }
 
       .separate-send-btn {
-        width: 32px;
+        width: 28px;
         height: 28px;
         padding: 0;
         display: inline-flex;
@@ -958,15 +1104,24 @@ function close() {
         justify-content: center;
       }
 
+      .address-actions :deep(.el-button + .el-button) {
+        margin-left: 0;
+      }
+
       @media (max-width: 560px) {
         .item-title {
           width: 46px;
+        }
+
+        .address-title {
+          min-width: 46px;
         }
       }
 
       .button-item {
         display: grid;
         grid-template-columns: auto auto 1fr auto;
+        align-items: center;
 
         .att-add {
           cursor: pointer;
@@ -1005,6 +1160,17 @@ function close() {
             }
           }
         }
+
+        .send-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+
+        .send-actions :deep(.el-button + .el-button) {
+          margin-left: 0;
+        }
       }
     }
   }
@@ -1032,6 +1198,19 @@ function close() {
   margin-top: 10px;
 }
 
+.schedule-send-box {
+  display: grid;
+  gap: 15px;
+
+  :deep(.el-date-editor) {
+    width: 100%;
+  }
+
+  .btn {
+    width: 100%;
+  }
+}
+
 .add-contact {
   color: var(--regular-text-color);
   cursor: pointer;
@@ -1057,10 +1236,9 @@ function close() {
 
 .address-panel {
   .recipient-input {
-    min-height: 52px;
-    max-height: 150px;
+    min-height: 38px;
+    max-height: 120px;
     overflow-y: auto;
-    resize: vertical;
   }
 
   .optional-address-input {
@@ -1082,14 +1260,12 @@ function close() {
   :deep(.el-input-tag__suffix) {
     align-self: stretch;
     display: flex;
-    align-items: flex-start;
-    padding-top: 4px;
+    align-items: center;
   }
 
   :deep(.el-input-tag__inner) {
     min-width: 120px;
-    align-items: flex-start;
-    padding-top: 4px;
+    align-items: center;
   }
 }
 

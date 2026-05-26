@@ -588,6 +588,12 @@ function openAdd() {
   display: grid;
   grid-template-columns: 1fr;
   gap: 15px;
+
+  :deep(.el-select),
+  :deep(.el-date-editor),
+  :deep(.el-input-number) {
+    width: 100%;
+  }
 }
 
 .mode-group {

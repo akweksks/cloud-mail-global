@@ -77,29 +77,35 @@
     </el-scrollbar>
     <el-dialog v-model="showAdd" :title="$t('addAccount')">
       <div class="container">
-        <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-          <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+        <div class="prefix-field">
+          <el-input v-model="addForm.email" ref="addRef" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+            <template #append>
+              <div @click.stop="openSelect">
+                <el-select
+                    ref="mySelect"
+                    v-model="addForm.suffix"
+                    :placeholder="$t('select')"
+                    class="select"
+                >
+                  <el-option
+                      v-for="item in domainList"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                  />
+                </el-select>
+                <div>
+                  <span>{{ addForm.suffix }}</span>
+                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                </div>
               </div>
-            </div>
-          </template>
-        </el-input>
+            </template>
+          </el-input>
+          <random-prefix-tools
+              v-model="addForm.email"
+              :min-length="settingStore.settings.minEmailPrefix"
+          />
+        </div>
         <el-button class="btn" type="primary" @click="submit" :loading="addLoading"
         >{{ $t('add') }}
         </el-button>
@@ -145,6 +151,7 @@ import {useUserStore} from "@/store/user.js";
 import {hasPerm} from "@/perm/perm.js"
 import {useI18n} from "vue-i18n";
 import {AccountAllReceiveEnum} from "@/enums/account-enum.js";
+import RandomPrefixTools from "@/components/random-prefix-tools/index.vue";
 
 const {t} = useI18n();
 const userStore = useUserStore();
@@ -568,6 +575,11 @@ path[fill="#ffdda1"] {
   .btn {
     width: 100%;
     margin-top: 15px;
+  }
+
+  .prefix-field {
+    display: grid;
+    gap: 8px;
   }
 
   .item {

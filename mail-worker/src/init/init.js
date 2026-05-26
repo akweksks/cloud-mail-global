@@ -32,8 +32,34 @@ const dbInit = {
 		await this.v3DB(c);
 		await this.v3_1DB(c);
 		await this.v3_2DB(c);
+		await this.v3_3DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_3DB(c) {
+		try {
+			await c.env.db.batch([
+				c.env.db.prepare(`
+					CREATE TABLE IF NOT EXISTS scheduled_email (
+						schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+						user_id INTEGER NOT NULL,
+						account_id INTEGER NOT NULL,
+						payload TEXT NOT NULL,
+						scheduled_time DATETIME NOT NULL,
+						status INTEGER DEFAULT 0 NOT NULL,
+						result_email_ids TEXT DEFAULT '' NOT NULL,
+						message TEXT DEFAULT '' NOT NULL,
+						create_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+						update_time DATETIME
+					)
+				`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_scheduled_email_due ON scheduled_email(status, scheduled_time)`),
+				c.env.db.prepare(`CREATE INDEX IF NOT EXISTS idx_scheduled_email_user ON scheduled_email(user_id, schedule_id)`)
+			]);
+		} catch (e) {
+			console.warn(`Skip migration: ${e.message}`);
+		}
 	},
 
 	async v3_2DB(c) {

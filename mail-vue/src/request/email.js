@@ -48,3 +48,9 @@ export function emailSend(form,progress) {
         noMsg: true
     })
 }
+
+export function emailSchedule(form) {
+    return http.post('/email/schedule', form, {
+        noMsg: true
+    })
+}

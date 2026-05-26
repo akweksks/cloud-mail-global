@@ -155,29 +155,35 @@
     </el-dialog>
     <el-dialog v-model="showAdd" :title="$t('addUser')">
       <div class="container">
-        <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
-          <template #append>
-            <div @click.stop="openSelect">
-              <el-select
-                  ref="mySelect"
-                  v-model="addForm.suffix"
-                  :placeholder="$t('select')"
-                  class="select"
-              >
-                <el-option
-                    v-for="item in domainList"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                />
-              </el-select>
-              <div>
-                <span>{{ addForm.suffix }}</span>
-                <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+        <div class="prefix-field">
+          <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
+            <template #append>
+              <div @click.stop="openSelect">
+                <el-select
+                    ref="mySelect"
+                    v-model="addForm.suffix"
+                    :placeholder="$t('select')"
+                    class="select"
+                >
+                  <el-option
+                      v-for="item in domainList"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                  />
+                </el-select>
+                <div>
+                  <span>{{ addForm.suffix }}</span>
+                  <Icon class="setting-icon" icon="mingcute:down-small-fill" width="20" height="20"/>
+                </div>
               </div>
-            </div>
-          </template>
-        </el-input>
+            </template>
+          </el-input>
+          <random-prefix-tools
+              v-model="addForm.email"
+              :min-length="settingStore.settings.minEmailPrefix"
+          />
+        </div>
         <el-input type="password" v-model="addForm.password" :placeholder="$t('password')"/>
         <el-select v-model="addForm.type" :placeholder="$t('perm')">
           <el-option v-for="item in roleList" :label="item.displayName || item.name" :value="item.roleId" :key="item.roleId"/>
@@ -387,6 +393,7 @@ import {isEmail} from "@/utils/verify-utils.js";
 import {useRoleStore} from "@/store/role.js";
 import {useUserStore} from "@/store/user.js";
 import {useI18n} from 'vue-i18n';
+import RandomPrefixTools from "@/components/random-prefix-tools/index.vue";
 
 defineOptions({
   name: 'user'
@@ -1115,6 +1122,11 @@ function adjustWidth() {
   display: grid;
   grid-template-columns: 1fr;
   gap: 15px;
+}
+
+.prefix-field {
+  display: grid;
+  gap: 8px;
 }
 
 .type {
