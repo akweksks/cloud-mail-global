@@ -153,7 +153,7 @@
         </el-button>
       </div>
     </el-dialog>
-    <el-dialog v-model="showAdd" :title="$t('addUser')">
+    <el-dialog v-model="showAdd" :title="$t('addUser')" @closed="resetAddForm">
       <div class="container">
         <div class="prefix-field">
           <el-input v-model="addForm.email" type="text" :placeholder="$t('emailAccount')" autocomplete="off">
@@ -750,13 +750,12 @@ function submit() {
   form.email = form.email + form.suffix
   userAdd(form).then(() => {
     addLoading.value = false
-    showAdd.value = false
+    addForm.email = ''
     ElMessage({
       message: t('addSuccessMsg'),
       type: "success",
       plain: true
     })
-    resetAddForm()
     getUserList(false)
   }).finally(res => {
     addLoading.value = false

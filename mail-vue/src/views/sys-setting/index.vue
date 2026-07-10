@@ -548,7 +548,7 @@
           </div>
         </template>
         <div class="forward-set-body">
-          <el-input :placeholder="$t('tgBotToken')" v-model="tgBotToken"></el-input>
+          <el-input :placeholder="setting.tgBotToken || $t('tgBotToken')" v-model="tgBotToken"></el-input>
           <el-input-tag tag-type="warning" :placeholder="$t('toBotTokenDesc')" v-model="tgChatId"
                         @add-tag="addChatTag"></el-input-tag>
           <el-input tag-type="warning" :placeholder="$t('customDomainDesc')" v-model="customDomain" ></el-input>
