@@ -16,6 +16,17 @@
 
 本项目深度融合 [maillab/cloud-mail](https://github.com/maillab/cloud-mail) 与 [AndrewYukon/cloud-mail-plus](https://github.com/AndrewYukon/cloud-mail-plus)，以 Plus 增强版为主干，同时补回原版中遗漏的黑名单、AI 验证码识别、登录页细节等能力，目标是形成保留全部功能的 `cloud-mail-global` 终极增强版。感谢两位原作者的开源贡献。
 
+## 上游同步记录
+
+本项目同时融合两个上游项目。为了后续排查问题、确认功能来源和判断是否需要继续同步，每次同步上游后都必须在这里记录对应的上游版本信息。
+
+| 同步日期 | 上游项目 | 上游分支/版本 | 上游提交 | 本项目提交 | 同步说明 |
+|---|---|---|---|---|---|
+| 2026-07-10 | [maillab/cloud-mail](https://github.com/maillab/cloud-mail) | `main` / `v3.0.0-13-ga6b66fc` | `a6b66fc` | `1603052` | 同步邮件列表并发查询优化、OAuth `silenced` 状态修复、角色空值判断修复、Telegram Token 展示保护、邮件 HTML 预览安全处理、添加用户弹窗体验优化、邮件详情分隔线样式对齐。 |
+| 2026-07-10 | [AndrewYukon/cloud-mail-plus](https://github.com/AndrewYukon/cloud-mail-plus) | `main` | `c9b5542` | `1603052` | 已检查主分支更新；AI Email Agent 相关源码在本项目中已同步，无需重复覆盖。未同步其项目名、部署脚本和 `wrangler.toml` 回退为 `cloud-mail` 的改动，避免破坏 `cloud-mail-global` 生产配置。 |
+
+> 说明：如果上游没有正式 release/tag，则以上游分支最新提交号作为版本号；如果有 tag，则同时记录 tag 与提交号。
+
 ## 新增功能
 
 ### 1. Cloudflare Email Service 集成
